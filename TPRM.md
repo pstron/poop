@@ -54,7 +54,7 @@ poop <param-name> poops <function-body> qooq
 ```
 
 * **Meaning**: create (manufacture) a `poop`. It is initially inert.
-* **Behavior**: when it is `pooped` (called), all occurrences of `<param-name>` inside `<function-body>` will be replaced with the supplied argument.
+* **Behavior**: when it is `pooping`ed (called), all occurrences of `<param-name>` inside `<function-body>` will be replaced with the supplied argument.
 * **Rule**: `<param-name>` must be a legal variable name.
 
 ### 3.2 `pooping`
@@ -65,7 +65,7 @@ Applies an argument to a `poop`, replacing variables inside it.
 pooping <poop> poopy <argument> qooq
 ```
 
-* **Meaning**: we are `pooping` into a `poop`: `<poop>`, using `<argument>` after `poopy` as the argument.
+* **Meaning**: we are `pooping` a `poop`: `<poop>`, using `<argument>` after `poopy` as the argument.
 * **Order**: first find the `<poop>`, then prepare the `<argument>`, then perform the combination.
 * **Associativity**: for multiple parameters, nesting is used.
 
