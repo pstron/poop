@@ -411,5 +411,4 @@ main = do
                 Right ast -> do
                     let initialState = AppState { macros = Map.empty, debugMode = isDebug }
                     void $ runStateT (runEval ast) initialState
-                    putStrLn "" 
         _ -> putStrLn "Usage: ./poop <file.poop> [--debug]"
