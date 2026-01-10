@@ -1,17 +1,18 @@
 -- poop.hs
 -- A minimal interpreter for the "poop" esolang.
 -- Build: ghc poop.hs -o poop
--- Usage: ./poop <file.poop>
+-- Usage: ./poop <file.poop> [--debug] [--lazy=true|false]
 
 module Main where
 
 import System.Environment (getArgs)
 import System.IO
-import Data.Char (isSpace, isAsciiLower)
-import Data.List (isPrefixOf, isSuffixOf, partition)
+import Data.Char (isSpace, isAsciiLower, toLower)
+import Data.List (isPrefixOf, isSuffixOf, partition, find)
 import qualified Data.Map as Map
 import Control.Monad.State
 import Control.Monad
+import Data.Maybe (fromMaybe)
 
 -- ==========================================
 -- Data Structures (AST)
@@ -35,7 +36,8 @@ instance Show Node where
 -- Application State
 data AppState = AppState {
     macros :: Map.Map String [Node], -- Macro Environment
-    debugMode :: Bool                -- Debug Flag
+    debugMode :: Bool,               -- Debug Flag
+    lazyMode :: Bool                 -- Evaluation Strategy (True = Pure Lazy, False = Original/Eager)
 }
 
 -- ==========================================
@@ -146,7 +148,7 @@ parseProgram code =
         Left err -> Left err
 
 -- ==========================================
--- Evaluator
+-- Evaluator Helpers
 -- ==========================================
 
 nodesToString :: [Node] -> String
@@ -270,7 +272,7 @@ step nodes = reduceFirst nodes
                 put (st { macros = Map.insert name body env })
                 return (rest, True)
 
-    -- PRIORITY 3: Expand macros
+    -- PRIORITY 3: Expand macros (Standard identifier resolution)
     reduceFirst (Token name : rest) = do
         st <- get
         let env = macros st
@@ -282,39 +284,50 @@ step nodes = reduceFirst nodes
                 (newRest, changed) <- reduceFirst rest
                 return (Token name : newRest, changed)
 
-    -- PRIORITY 4: Function Application
+    -- PRIORITY 4: Function Application (The Split Strategy)
     reduceFirst (Apply func args : rest) = do
+        -- 4a. Reduce the function head first
         (newFunc, funcChanged) <- reduceFirst [func]
         if funcChanged
             then do
                 let func' = case newFunc of [f] -> f; _ -> Token "ERROR"
                 return (Apply func' args : rest, True)
             else do
+                st <- get
+                let isLazy = lazyMode st
+                
                 case func of
+                    -- CASE: Standard Function
                     Func param body -> do
-                        -- First expand macros in body without reducing
-                        (expandedBody, bodyExpanded) <- expandMacrosDeep body
-                        if bodyExpanded
-                            then return (Apply (Func param expandedBody) args : rest, True)
+                        if isLazy
+                            then do
+                                -- [STRATEGY: LAZY]
+                                debugLog $ "[APPLY-LAZY] Substitution on: " ++ param
+                                let substituted = substitute param args body
+                                return (substituted ++ rest, True)
                             else do
-                                -- Check for Print inside body
-                                if any containsPrint body
-                                    then do
-                                        debugLog $ "[SUBST] Func has Print. Replacing '" ++ param ++ "' with args (Lazy)."
-                                        let substituted = substitute param args body
-                                        return (substituted ++ rest, True)
+                                -- [STRATEGY: ORIGINAL]
+                                (expandedBody, bodyExpanded) <- expandMacrosDeep body
+                                if bodyExpanded
+                                    then return (Apply (Func param expandedBody) args : rest, True)
                                     else do
-                                        -- Normal reduction: reduce args first
-                                        (newArgs, argsChanged) <- reduceFirst args
-                                        if argsChanged
-                                            then return (Apply (Func param body) newArgs : rest, True)
-                                            else do
-                                                debugLog $ "[APPLY] Beta-reduction on: " ++ param
+                                        if any containsPrint body
+                                            then do
+                                                debugLog "[APPLY-ORIG] Func has Print. Lazy Subst."
                                                 let substituted = substitute param args body
                                                 return (substituted ++ rest, True)
-                    
+                                            else do
+                                                -- Eagerly reduce arguments first
+                                                (newArgs, argsChanged) <- reduceFirst args
+                                                if argsChanged
+                                                    then return (Apply (Func param body) newArgs : rest, True)
+                                                    else do
+                                                        debugLog "[APPLY-ORIG] Beta-reduction (Eager)."
+                                                        let substituted = substitute param args body
+                                                        return (substituted ++ rest, True)
+
+                    -- CASE: Token (Built-ins or Macros)
                     Token t -> do
-                        st <- get
                         if t == "Print" 
                             then if all (isReduced (macros st)) args
                                 then do
@@ -343,11 +356,13 @@ step nodes = reduceFirst nodes
                                             (newRest, restChanged) <- reduceFirst rest
                                             return (Apply (Token t) args : newRest, restChanged)
                     
+                    -- CASE: Nested Application ((f x) y)
                     Apply innerF innerArgs -> do
                         ([newInner], changed) <- reduceFirst [Apply innerF innerArgs]
                         if changed
                             then return (Apply newInner args : rest, True)
                             else do
+                                -- If inner application is stuck, try reducing args?
                                 (newArgs, argsChanged) <- reduceFirst args
                                 if argsChanged
                                     then return (Apply (Apply innerF innerArgs) newArgs : rest, True)
@@ -355,6 +370,7 @@ step nodes = reduceFirst nodes
                                         (newRest, restChanged) <- reduceFirst rest
                                         return (Apply (Apply innerF innerArgs) args : newRest, restChanged)
                     
+                    -- Fallback
                     _ -> do
                         (newArgs, changed) <- reduceFirst args
                         if changed
@@ -397,11 +413,22 @@ runEval nodes = do
         then runEval newNodes
         else return newNodes
 
+-- ==========================================
+-- Main
+-- ==========================================
+
 main :: IO ()
 main = do
     args <- getArgs
-    let (opts, files) = partition ("-" `isPrefixOf`) args
-    let isDebug = "--debug" `elem` opts
+    let (flags, files) = partition ("-" `isPrefixOf`) args
+    
+    -- Parse Flags
+    let isDebug = "--debug" `elem` flags
+    
+    let lazyFlag = find ("--lazy=" `isPrefixOf`) flags
+    let isLazy = case lazyFlag of
+            Just val -> map toLower (drop 7 val) == "true"
+            Nothing  -> True
 
     case files of
         [fileName] -> do
@@ -409,6 +436,16 @@ main = do
             case parseProgram content of
                 Left err -> putStrLn $ "Error parsing: " ++ err
                 Right ast -> do
-                    let initialState = AppState { macros = Map.empty, debugMode = isDebug }
+                    when isDebug $ hPutStrLn stderr $ "Starting Poop Interpreter. Mode: " ++ (if isLazy then "Lazy (Call-by-Name)" else "Original (Eager/Mixed)")
+                    let initialState = AppState { 
+                        macros = Map.empty, 
+                        debugMode = isDebug,
+                        lazyMode = isLazy
+                    }
                     void $ runStateT (runEval ast) initialState
-        _ -> putStrLn "Usage: ./poop <file.poop> [--debug]"
+        _ -> do
+            putStrLn "Usage: ./poop <file.poop> [options]"
+            putStrLn "Options:"
+            putStrLn "  --debug          Enable verbose AST logging"
+            putStrLn "  --lazy=true      Use Lazy Evaluation (Call-by-Name) [Default]"
+            putStrLn "  --lazy=false     Use Original Evaluation (Mixed Eager)"
