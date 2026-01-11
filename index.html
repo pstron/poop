@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poop Web Interpreter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=JetBrains+Mono:wght@400&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <h1>💩 Poop.js</h1>
+
+  <div class="controls">
+    <button id="run-btn">Run Poop</button>
+    <button id="reset-btn">Reset Poop</button>
+    <label><input type="checkbox" id="lazy-mode" checked> Lazy Mode</label>
+    <label><input type="checkbox" id="debug-mode"> Debug Trace</label>
+  </div>
+
+  <div class="container">
+    <div class="editor-pane">
+      <textarea id="code-area" placeholder="Write your poop code here...">
+poop Greet is
+  poop name poops
+    PoHelloop Poop name
+  qooq
+qooq
+
+pooping Print poopy
+  pooping Greet poopy World qooq
+qooq
+</textarea>
+    </div>
+
+    <div class="io-pane">
+      <div id="output-area" class="panel"></div>
+      <div class="input-group">
+        <input type="text" id="input-line" placeholder="Input here when requested..." disabled>
+        <button id="send-btn" disabled>Send</button>
+      </div>
+      <div id="log-area" class="panel"></div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-content">
+      <p>
+        <a href="https://github.com/pstron/poop" target="_blank" rel="noopener">Poop Web Interpreter</a>
+        is Dual-licensed under
+        <a href="POOPLICENSE" target="_blank">The Poop License</a> /
+        <a href="MITLICENSE" target="_blank">MIT License</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="poop.js"></script>
+  <script src="ui.js"></script>
+</body>
+
+</html>
