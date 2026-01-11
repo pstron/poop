@@ -1,6 +1,6 @@
 # The Poop Reference Manual
 
-**Version 1.0**
+**Version 1.1**
 
 ## 1. Overview
 
@@ -111,50 +111,68 @@ The environment provides two special built-in macros.
 
 ---
 
-## 5. Programming Paradigms
+## 5. Evaluation Model
 
 ### 5.1 Scope and evaluation
 
 * **Lexical scope**: parameter names are only valid inside the `poops ... qooq` in which they are defined.
-* **Evaluation strategy**: normally applicative order (arguments are evaluated before application). However, inside function bodies that involve `Print`, a form of “lazy” substitution may be used to ensure side effects occur in the expected order.
+* **Evaluation strategy**: The default strategy is **lazy evaluation (call-by-name)**. Arguments are substituted into the function body *before* they are reduced, and are only evaluated when their value is needed. This means functions can be defined that might never use certain arguments, and their evaluation will be skipped. This also ensures predictable ordering of side-effects like `Print`.
 
-### 5.2 Example: a basic greeting
+## 6. Programming Examples
+
+### 6.1 Example: a basic greeting
 
 ```poop
+// A example Hello World poop program
 // Define a macro Greet
-poop Greet is 
-    poop x poops 
-        Hello Poop x 
-    qooq 
+poop Greet is
+  poop name poops
+    PoHelloop Poop name
+  qooq
 qooq
 
-// Execute: print (Greet "World")
+// Execute: Print (Greet "World")
 pooping Print poopy
-    pooping Greet poopy World qooq
+  pooping Greet poopy
+    PoWorldop
+  qooq
 qooq
 ```
 
-### 5.3 Example: Church numerals
+### 6.2 Example: Church numerals
 
 In Poop, numbers are just repeated function applications.
 
 ```poop
-// 0: accepts f, accepts x, returns x
+// 0: f -> x -> x
 poop 0 is 
-    poop f poops poop x poops x qooq qooq 
+  poop f poops poop x poops x qooq qooq 
 qooq
 
 // Succ: successor function, n -> f -> x -> f (n f x)
 poop Succ is
-    poop n poops
-        poop f poops
-            poop x poops
-                pooping f poopy
-                    pooping pooping n poopy f qooq poopy x qooq
-                qooq
-            qooq
+  poop n poops
+    poop f poops
+      poop x poops
+        pooping f poopy
+          pooping 
+            pooping n poopy f qooq
+          poopy x
+          qooq
         qooq
+      qooq
     qooq
+  qooq
+qooq
+
+// >: Print a Church numeral as repeated "poop"s
+poop > is
+  poop num poops
+    pooping
+      pooping num poopy Print qooq
+      poopy Popoop\nop
+    qooq
+  qooq
 qooq
 ```
 

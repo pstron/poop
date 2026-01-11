@@ -24,13 +24,13 @@ Please check [The Poop Reference Manual](TPRM.md).
 // A example Hello World poop program
 poop Greet is
   poop name poops
-    Hello Poop name
+    PoHelloop Poop name
   qooq
 qooq
 
 pooping Print poopy
   pooping Greet poopy
-    World
+    PoWorldop
   qooq
 qooq
 ```
