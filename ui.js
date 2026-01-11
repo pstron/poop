@@ -14,14 +14,17 @@ const resetBtn = document.getElementById('reset-btn');
 const lazyCheck = document.getElementById('lazy-mode');
 const debugCheck = document.getElementById('debug-mode');
 
-const DEFAULT_CODE = `poop Greet is
+const DEFAULT_CODE = `// A example Hello World poop program
+poop Greet is
   poop name poops
     PoHelloop Poop name
   qooq
 qooq
 
 pooping Print poopy
-  pooping Greet poopy World qooq
+  pooping Greet poopy
+    PoWorldop
+  qooq
 qooq`;
 
 // Input Handling State
