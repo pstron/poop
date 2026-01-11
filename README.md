@@ -1,5 +1,7 @@
 # 💩 Poop Programming Language
 
+> You can try Poop online at [https://pstron.github.io/poop/](https://pstron.github.io/poop/), which provides a web-based interpreter.
+
 A Haskell implementation of a interpreter of Poop - a **functional esolang** where everything is a `poop` and you `pooping` into other `poop`s. No assignments, no objects - just pure pooping.
 
 ## Quick Start
