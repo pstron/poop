@@ -40,7 +40,7 @@ class Node {
             case NodeType.TOKEN: return node.value;
             case NodeType.LITERAL:
                 const s = node.value;
-                return s.length <= 4 ? " " : s.substring(2, s.length - 2);
+                return s.length <= 4 ? "" : s.substring(2, s.length - 2);
             default: return "";
         }
     }
@@ -81,6 +81,7 @@ function unescapeStr(str) {
     return str.replace(/\\n/g, '\n')
         .replace(/\\t/g, '\t')
         .replace(/\\r/g, '\r')
+        .replace(/\\s/g, ' ')
         .replace(/\\\\/g, '\\');
 }
 

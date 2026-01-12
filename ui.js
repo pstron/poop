@@ -17,7 +17,7 @@ const debugCheck = document.getElementById('debug-mode');
 const DEFAULT_CODE = `// A example Hello World poop program
 poop Greet is
   poop name poops
-    PoHelloop Poop name
+    PoHello\sop name
   qooq
 qooq
 
