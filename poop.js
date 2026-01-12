@@ -78,11 +78,16 @@ function removeComments(str) {
 }
 
 function unescapeStr(str) {
-    return str.replace(/\\n/g, '\n')
-        .replace(/\\t/g, '\t')
-        .replace(/\\r/g, '\r')
-        .replace(/\\s/g, ' ')
-        .replace(/\\\\/g, '\\');
+    return str.replace(/\\(.)/g, (match, char) => {
+        switch (char) {
+            case '\\': return '\\';
+            case 'n': return '\n';
+            case 't': return '\t';
+            case 'r': return '\r';
+            case 's': return ' ';
+            default: return match;
+        }
+    });
 }
 
 function tokenize(s) {
