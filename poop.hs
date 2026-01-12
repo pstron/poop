@@ -1,7 +1,8 @@
 -- poop.hs
 -- A minimal interpreter for the "poop" esolang.
+-- Version: v1.3.1
 -- Build: ghc poop.hs -o poop
--- Usage: ./poop <file.poop> [--debug] [--lazy=true|false]
+-- Usage: ./poop <file.poop> [--debug] [--lazy=true|false] [--print-steps] [--show-stepno]
 
 module Main where
 
@@ -37,7 +38,10 @@ instance Show Node where
 data AppState = AppState {
     macros :: Map.Map String [Node], -- Macro Environment
     debugMode :: Bool,               -- Debug Flag
-    lazyMode :: Bool                 -- Evaluation Strategy (True = Pure Lazy, False = Original/Eager)
+    lazyMode :: Bool,                -- Evaluation Strategy (True = Pure Lazy, False = Original/Eager)
+    printTotalSteps :: Bool,         -- Flag: Print total steps at the end
+    showStepNo :: Bool,              -- Flag: Show step number in debug log
+    stepCount :: Integer             -- Counter: Current reduction step
 }
 
 -- ==========================================
@@ -198,7 +202,12 @@ debugLog :: String -> StateT AppState IO ()
 debugLog msg = do
     st <- get
     when (debugMode st) $ liftIO $ do
-        hPutStrLn stderr msg
+        -- If showStepNo is enabled, prefix with [Step N]
+        -- We add 1 because this log happens *during* the processing of the next step
+        let prefix = if showStepNo st 
+                     then "[Step " ++ show (stepCount st + 1) ++ "] " 
+                     else ""
+        hPutStrLn stderr $ prefix ++ msg
         hFlush stderr
 
 -- ========== Macro expansion helpers ==========
@@ -296,7 +305,7 @@ step nodes = reduceFirst nodes
             else do
                 st <- get
                 let isLazy = lazyMode st
-                
+                 
                 case func of
                     -- CASE: Standard Function
                     Func param body -> do
@@ -407,12 +416,25 @@ runEval nodes = do
     st <- get
     when (debugMode st) $ liftIO $ do
         hPutStrLn stderr "----------------------------------------"
-        hPutStrLn stderr $ "AST: " ++ nodesToString nodes
+        -- Manual construction for AST log to ensure it matches debugLog's style
+        let prefix = if showStepNo st 
+                     then "[Step " ++ show (stepCount st + 1) ++ "] " 
+                     else ""
+        hPutStrLn stderr $ prefix ++ "AST: " ++ nodesToString nodes
     
     (newNodes, changed) <- step nodes
+    
     if changed
-        then runEval newNodes
-        else return newNodes
+        then do
+            -- Increment step count if statistics are enabled
+            when (printTotalSteps st || showStepNo st) $ 
+                modify $ \s -> s { stepCount = stepCount s + 1 }
+            runEval newNodes
+        else do
+            -- Execution finished. Print total steps if requested.
+            when (printTotalSteps st) $ liftIO $ 
+                putStrLn $ "Total steps: " ++ show (stepCount st)
+            return newNodes
 
 -- ==========================================
 -- Main
@@ -425,6 +447,8 @@ main = do
     
     -- Parse Flags
     let isDebug = "--debug" `elem` flags
+    let isPrintSteps = "--print-steps" `elem` flags
+    let isShowStepNo = "--show-stepno" `elem` flags
     
     let lazyFlag = find ("--lazy=" `isPrefixOf`) flags
     let isLazy = case lazyFlag of
@@ -437,16 +461,21 @@ main = do
             case parseProgram content of
                 Left err -> putStrLn $ "Error parsing: " ++ err
                 Right ast -> do
-                    when isDebug $ hPutStrLn stderr $ "Starting Poop Interpreter. Mode: " ++ (if isLazy then "Lazy (Call-by-Name)" else "Original (Eager/Mixed)")
+                    when isDebug $ hPutStrLn stderr $ "Starting Poop Interpreter v1.3.1. Mode: " ++ (if isLazy then "Lazy (Call-by-Name)" else "Original (Eager/Mixed)")
                     let initialState = AppState { 
                         macros = Map.empty, 
                         debugMode = isDebug,
-                        lazyMode = isLazy
+                        lazyMode = isLazy,
+                        printTotalSteps = isPrintSteps,
+                        showStepNo = isShowStepNo,
+                        stepCount = 0
                     }
                     void $ runStateT (runEval ast) initialState
         _ -> do
             putStrLn "Usage: ./poop <file.poop> [options]"
             putStrLn "Options:"
             putStrLn "  --debug          Enable verbose AST logging"
+            putStrLn "  --print-steps    Print total reduction steps at the end"
+            putStrLn "  --show-stepno    Show step numbers in debug output"
             putStrLn "  --lazy=true      Use Lazy Evaluation (Call-by-Name) [Default]"
             putStrLn "  --lazy=false     Use Original Evaluation (Mixed Eager)"

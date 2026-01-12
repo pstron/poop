@@ -1,6 +1,6 @@
 # The Poop Reference Manual
 
-**Version 1.2**
+**Version 1.3**
 
 ## 1. Overview
 
@@ -78,6 +78,7 @@ pooping <poop> poopy <argument> qooq
 * **Meaning**: we are `pooping` a `poop`: `<poop>`, using `<argument>` after `poopy` as the argument.
 * **Order**: first find the `<poop>`, then prepare the `<argument>`, then perform the combination.
 * **Associativity**: for multiple parameters, nesting is used.
+* **Evaluation of Non-poop Targets**: If `<poop>` is not a `poop`, the `pooping` expression remains unevaluated until the target becomes a `poop` (or will never be evaluated if no such situation).
 
 ### 3.3 Defining macros
 
@@ -114,9 +115,10 @@ The environment provides two special built-in macros.
 * **Form**: `pooping Print poopy <x> qooq`
 * **Behavior**:
 
-  1. `<x>` is fully evaluated and converted to a string.
-  2. The result is written to standard output (the terminal).
-  3. **Return value**: `<x>` itself is returned.
+  1. **Evaluation**: <x> is fully evaluated.
+  2. **String Conversion**: The result is converted to a string (multiple adjacent tokens are concatenated without added spaces).
+  3. **Output**: The result is written to standard output (the terminal).
+  4. **Return value**: `<x>` itself is returned.
 * **Characteristic**: functionally `Print` is equivalent to the identity `poop`, except that it prints the value it’s given.
 
 ---
@@ -125,7 +127,7 @@ The environment provides two special built-in macros.
 
 ### 5.1 Scope and evaluation
 
-* **Lexical scope**: parameter names are only valid inside the `poops ... qooq` in which they are defined.
+* **Lexical scope**: parameter names are only valid inside the `poops ... qooq` in which they are defined. A parameter defined in an inner `poop` shadows any parameter of the same name from an outer `poop`.
 * **Evaluation strategy**: The default strategy is **lazy evaluation (call-by-name)**. Arguments are substituted into the function body *before* they are reduced, and are only evaluated when their value is needed. This means functions can be defined that might never use certain arguments, and their evaluation will be skipped. This also ensures predictable ordering of side-effects like `Print`.
 
 ## 6. Programming Examples
