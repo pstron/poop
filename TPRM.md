@@ -1,6 +1,6 @@
 # The Poop Reference Manual
 
-**Version 1.3**
+**Version 1.4**
 
 ## 1. Overview
 
@@ -115,7 +115,8 @@ The environment provides two special built-in macros.
 * **Form**: `pooping Print poopy <x> qooq`
 * **Behavior**:
 
-  1. **Evaluation**: <x> is fully evaluated.
+  1. **Evaluation**: `<x>` is fully evaluated.
+     **Note**: If `<x>` contains any unevaluable `poop` or `pooping` construct, `Print` will not execute, until it becomes evaluable, or will never execute.
   2. **String Conversion**: The result is converted to a string (multiple adjacent tokens are concatenated without added spaces).
   3. **Output**: The result is written to standard output (the terminal).
   4. **Return value**: `<x>` itself is returned.

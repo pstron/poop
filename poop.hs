@@ -1,8 +1,8 @@
 -- poop.hs
 -- A minimal interpreter for the "poop" esolang.
--- Version: v1.3.1
+-- Version: v1.4.1
 -- Build: ghc poop.hs -o poop
--- Usage: ./poop <file.poop> [--debug] [--lazy=true|false] [--print-steps] [--show-stepno]
+-- Usage: ./poop <file.poop> [--debug] [--trace] [--lazy=true|false] [--steps] [--stepno]
 
 module Main where
 
@@ -21,7 +21,7 @@ import Data.Maybe (fromMaybe)
 
 data Node
     = Token String              -- General identifier or text
-    | Literal String            -- Po...op literals
+    | Literal String            -- Po...op literals (stored as raw "Poop")
     | Func String [Node]        -- poop <para> poops <body> qooq
     | MacroDef String [Node]    -- poop <n> is <body> qooq
     | Apply Node [Node]         -- pooping <func> poopy <arg> qooq
@@ -37,8 +37,9 @@ instance Show Node where
 -- Application State
 data AppState = AppState {
     macros :: Map.Map String [Node], -- Macro Environment
-    debugMode :: Bool,               -- Debug Flag
-    lazyMode :: Bool,                -- Evaluation Strategy (True = Pure Lazy, False = Original/Eager)
+    debugMode :: Bool,               -- Basic Debug Info (Logs)
+    traceMode :: Bool,               -- Deep Trace (AST Dump)
+    lazyMode :: Bool,                -- True = Lazy, False = Legacy (Strict/Old)
     printTotalSteps :: Bool,         -- Flag: Print total steps at the end
     showStepNo :: Bool,              -- Flag: Show step number in debug log
     stepCount :: Integer             -- Counter: Current reduction step
@@ -68,6 +69,16 @@ unescape ('\\':'s':xs) = ' ' : unescape xs
 unescape ('\\':'\\':xs) = '\\' : unescape xs
 unescape ('\\':x:xs) = x : unescape xs
 unescape (x:xs) = x : unescape xs
+
+-- Re-escapes string for Trace display (e.g. newline becomes "\n")
+escapeForTrace :: String -> String
+escapeForTrace [] = []
+escapeForTrace ('\n':xs) = "\\n" ++ escapeForTrace xs
+escapeForTrace ('\t':xs) = "\\t" ++ escapeForTrace xs
+escapeForTrace ('\r':xs) = "\\r" ++ escapeForTrace xs
+escapeForTrace (' ':xs) = "\\s" ++ escapeForTrace xs
+escapeForTrace ('\\':xs) = "\\\\" ++ escapeForTrace xs
+escapeForTrace (x:xs) = x : escapeForTrace xs
 
 tokenize :: String -> [String]
 tokenize s = 
@@ -156,15 +167,27 @@ parseProgram code =
 -- Evaluator Helpers
 -- ==========================================
 
-nodesToString :: [Node] -> String
-nodesToString [] = ""
-nodesToString (x:xs) = nodeStr x ++ nodesToString xs
+-- Standard String conversion for Print output (decodes Poop literals)
+nodesToOutputString :: [Node] -> String
+nodesToOutputString [] = ""
+nodesToOutputString (x:xs) = nodeStr x ++ nodesToOutputString xs
   where
     nodeStr (Token s) = s
     nodeStr (Literal s) = if length s <= 4 then "" else drop 2 (take (length s - 2) s)
-    nodeStr (Func p b) = "poop " ++ p ++ " poops " ++ nodesToString b ++ " qooq"
-    nodeStr (MacroDef n b) = "poop " ++ n ++ " is " ++ nodesToString b ++ " qooq"
-    nodeStr (Apply f a) = "pooping " ++ nodeStr f ++ " poopy " ++ nodesToString a ++ " qooq"
+    nodeStr (Func p b) = "poop " ++ p ++ " poops " ++ nodesToOutputString b ++ " qooq"
+    nodeStr (MacroDef n b) = "poop " ++ n ++ " is " ++ nodesToOutputString b ++ " qooq"
+    nodeStr (Apply f a) = "pooping " ++ nodeStr f ++ " poopy " ++ nodesToOutputString a ++ " qooq"
+
+-- Trace String conversion (Raw literals, escaped chars)
+nodesToTraceString :: [Node] -> String
+nodesToTraceString [] = ""
+nodesToTraceString (x:xs) = nodeTrace x ++ " " ++ nodesToTraceString xs
+  where
+    nodeTrace (Token s) = escapeForTrace s
+    nodeTrace (Literal s) = escapeForTrace s
+    nodeTrace (Func p b) = "poop " ++ p ++ " poops " ++ nodesToTraceString b ++ "qooq"
+    nodeTrace (MacroDef n b) = "poop " ++ n ++ " is " ++ nodesToTraceString b ++ "qooq"
+    nodeTrace (Apply f a) = "pooping " ++ nodeTrace f ++ " poopy " ++ nodesToTraceString a ++ "qooq"
 
 isReduced :: Map.Map String [Node] -> Node -> Bool
 isReduced env (Token t) = t /= "Input" && not (Map.member t env)
@@ -172,6 +195,12 @@ isReduced _ (Literal _) = True
 isReduced env (Func _ body) = all (isReduced env) body
 isReduced env (MacroDef _ body) = all (isReduced env) body
 isReduced _ (Apply _ _) = False
+
+-- Strict check for Print command: only Literals and Tokens are printable.
+isPrintable :: Map.Map String [Node] -> Node -> Bool
+isPrintable env (Token t) = t /= "Input" && not (Map.member t env)
+isPrintable _ (Literal _) = True
+isPrintable _ _ = False
 
 containsPrint :: Node -> Bool
 containsPrint (Apply (Token "Print") _) = True
@@ -198,16 +227,26 @@ substitute param argNodes (n:ns) =
                 in [Apply newF newA]
     in processedHead ++ substitute param argNodes ns
 
-debugLog :: String -> StateT AppState IO ()
-debugLog msg = do
+-- Log for general events (Debug Mode)
+logDebug :: String -> StateT AppState IO ()
+logDebug msg = do
     st <- get
     when (debugMode st) $ liftIO $ do
-        -- If showStepNo is enabled, prefix with [Step N]
-        -- We add 1 because this log happens *during* the processing of the next step
         let prefix = if showStepNo st 
                      then "[Step " ++ show (stepCount st + 1) ++ "] " 
-                     else ""
+                     else "[poop.hs] "
         hPutStrLn stderr $ prefix ++ msg
+        hFlush stderr
+
+-- Log for AST dump (Trace Mode)
+logTrace :: [Node] -> StateT AppState IO ()
+logTrace nodes = do
+    st <- get
+    when (traceMode st) $ liftIO $ do
+        let prefix = if showStepNo st 
+                     then "[Step " ++ show (stepCount st + 1) ++ "] " 
+                     else "[Trace] "
+        hPutStrLn stderr $ prefix ++ nodesToTraceString nodes
         hFlush stderr
 
 -- ========== Macro expansion helpers ==========
@@ -267,7 +306,7 @@ step nodes = reduceFirst nodes
 
     -- PRIORITY 1: Input
     reduceFirst (Token "Input" : rest) = do
-        debugLog "[INPUT] Reading..."
+        logDebug "Input requested..."
         (expansion, _) <- expandInput
         return (expansion ++ rest, True)
 
@@ -278,7 +317,7 @@ step nodes = reduceFirst nodes
         if Map.member name env
             then error $ "Macro redefinition error: " ++ name
             else do
-                debugLog $ "[DEF] Macro: " ++ name
+                logDebug $ "Defined Macro: " ++ name
                 put (st { macros = Map.insert name body env })
                 return (rest, True)
 
@@ -288,7 +327,8 @@ step nodes = reduceFirst nodes
         let env = macros st
         case Map.lookup name env of
             Just body -> do
-                debugLog $ "[EXPAND] Macro: " ++ name
+                when (traceMode st) $
+                  logDebug $ "Expanded Macro: " ++ name
                 return (body ++ rest, True)
             Nothing -> do
                 (newRest, changed) <- reduceFirst rest
@@ -305,6 +345,7 @@ step nodes = reduceFirst nodes
             else do
                 st <- get
                 let isLazy = lazyMode st
+                let env = macros st
                  
                 case func of
                     -- CASE: Standard Function
@@ -312,18 +353,20 @@ step nodes = reduceFirst nodes
                         if isLazy
                             then do
                                 -- [STRATEGY: LAZY]
-                                debugLog $ "[APPLY-LAZY] Substitution on: " ++ param
+                                when (traceMode st) $
+                                  logDebug $ "Lazy Apply on: " ++ param
                                 let substituted = substitute param args body
                                 return (substituted ++ rest, True)
                             else do
-                                -- [STRATEGY: ORIGINAL]
+                                -- [STRATEGY: LEGACY / STRICT]
                                 (expandedBody, bodyExpanded) <- expandMacrosDeep body
                                 if bodyExpanded
                                     then return (Apply (Func param expandedBody) args : rest, True)
                                     else do
                                         if any containsPrint body
                                             then do
-                                                debugLog "[APPLY-ORIG] Func has Print. Lazy Subst."
+                                                when (traceMode st) $
+                                                  logDebug "Legacy Apply: Contains Print, Lazy Subst."
                                                 let substituted = substitute param args body
                                                 return (substituted ++ rest, True)
                                             else do
@@ -332,30 +375,36 @@ step nodes = reduceFirst nodes
                                                 if argsChanged
                                                     then return (Apply (Func param body) newArgs : rest, True)
                                                     else do
-                                                        debugLog "[APPLY-ORIG] Beta-reduction (Eager)."
+                                                        when (traceMode st) $
+                                                          logDebug "Legacy Apply: Beta-reduction."
                                                         let substituted = substitute param args body
                                                         return (substituted ++ rest, True)
 
                     -- CASE: Token (Built-ins or Macros)
                     Token t -> do
                         if t == "Print" 
-                            then if all (isReduced (macros st)) args
-                                then do
-                                    let output = nodesToString args
-                                    liftIO $ putStr output 
-                                    liftIO $ hFlush stdout
-                                    debugLog $ "[PRINT] Output: " ++ output
-                                    return (args ++ rest, True)
-                                else do
-                                    (newArgs, changed) <- reduceFirst args
-                                    if changed
-                                        then return (Apply (Token "Print") newArgs : rest, True)
-                                        else do
-                                            (newRest, restChanged) <- reduceFirst rest
-                                            return (Apply (Token "Print") args : newRest, restChanged)
+                            then do
+                                if all (isPrintable env) args
+                                    then do
+                                        let output = nodesToOutputString args
+                                        liftIO $ putStr output 
+                                        liftIO $ hFlush stdout
+                                        logDebug $ "Print Output: " ++ output
+                                        return (args ++ rest, True)
+                                    else do
+                                        -- Try to reduce arguments
+                                        (newArgs, changed) <- reduceFirst args
+                                        if changed
+                                            then return (Apply (Token "Print") newArgs : rest, True)
+                                            else do
+                                                -- Stuck Print: Arguments are irreducible but not printable (e.g. functions)
+                                                -- In this case, we simply don't execute Print (treat as ID) or move on.
+                                                -- We reduce the rest of the stream.
+                                                (newRest, restChanged) <- reduceFirst rest
+                                                return (Apply (Token "Print") args : newRest, restChanged)
+
                             else case Map.lookup t (macros st) of
                                 Just body -> do
-                                    debugLog $ "[EXPAND] Macro in Apply: " ++ t
                                     let newFunc = case body of [x] -> x; _ -> Token "ERROR_MACRO_SINGLE"
                                     return (Apply newFunc args : rest, True)
                                 Nothing -> do
@@ -414,13 +463,9 @@ expandInput = do
 runEval :: [Node] -> StateT AppState IO [Node]
 runEval nodes = do
     st <- get
-    when (debugMode st) $ liftIO $ do
-        hPutStrLn stderr "----------------------------------------"
-        -- Manual construction for AST log to ensure it matches debugLog's style
-        let prefix = if showStepNo st 
-                     then "[Step " ++ show (stepCount st + 1) ++ "] " 
-                     else ""
-        hPutStrLn stderr $ prefix ++ "AST: " ++ nodesToString nodes
+    
+    -- Only log trace if traceMode is on
+    logTrace nodes
     
     (newNodes, changed) <- step nodes
     
@@ -431,9 +476,10 @@ runEval nodes = do
                 modify $ \s -> s { stepCount = stepCount s + 1 }
             runEval newNodes
         else do
-            -- Execution finished. Print total steps if requested.
-            when (printTotalSteps st) $ liftIO $ 
-                putStrLn $ "Total steps: " ++ show (stepCount st)
+            -- Execution finished. 
+            when (debugMode st) $ logDebug "Terminated."
+            when (printTotalSteps st && debugMode st) $ liftIO $ 
+                hPutStrLn stderr $ "[poop.hs] Total reduction steps: " ++ show (stepCount st)
             return newNodes
 
 -- ==========================================
@@ -446,14 +492,18 @@ main = do
     let (flags, files) = partition ("-" `isPrefixOf`) args
     
     -- Parse Flags
-    let isDebug = "--debug" `elem` flags
-    let isPrintSteps = "--print-steps" `elem` flags
-    let isShowStepNo = "--show-stepno" `elem` flags
+    let isTrace = "--trace" `elem` flags
+    -- Debug is implied by Trace
+    let isDebug = "--debug" `elem` flags || isTrace
+    let isPrintSteps = "--steps" `elem` flags
+    let isShowStepNo = "--stepno" `elem` flags
     
     let lazyFlag = find ("--lazy=" `isPrefixOf`) flags
-    let isLazy = case lazyFlag of
-            Just val -> map toLower (drop 7 val) == "true"
-            Nothing  -> True
+    let (isLazy, isDeprecatedMode) = case lazyFlag of
+            Just val -> if map toLower (drop 7 val) == "false" 
+                        then (False, True) 
+                        else (True, False)
+            Nothing  -> (True, False)
 
     case files of
         [fileName] -> do
@@ -461,10 +511,17 @@ main = do
             case parseProgram content of
                 Left err -> putStrLn $ "Error parsing: " ++ err
                 Right ast -> do
-                    when isDebug $ hPutStrLn stderr $ "Starting Poop Interpreter v1.3.1. Mode: " ++ (if isLazy then "Lazy (Call-by-Name)" else "Original (Eager/Mixed)")
+                    when isDebug $ do
+                        hPutStrLn stderr "[poop.hs] Started interpreter v1.4.1"
+                        when isDeprecatedMode $ 
+                            hPutStrLn stderr "[poop.hs] WARNING: Legacy (Strict) evaluation is deprecated. Default is Lazy."
+                        when isTrace $
+                            hPutStrLn stderr "[poop.hs] Trace Mode Enabled (Full AST Dump)."
+                    
                     let initialState = AppState { 
                         macros = Map.empty, 
                         debugMode = isDebug,
+                        traceMode = isTrace,
                         lazyMode = isLazy,
                         printTotalSteps = isPrintSteps,
                         showStepNo = isShowStepNo,
@@ -474,8 +531,9 @@ main = do
         _ -> do
             putStrLn "Usage: ./poop <file.poop> [options]"
             putStrLn "Options:"
-            putStrLn "  --debug          Enable verbose AST logging"
-            putStrLn "  --print-steps    Print total reduction steps at the end"
-            putStrLn "  --show-stepno    Show step numbers in debug output"
-            putStrLn "  --lazy=true      Use Lazy Evaluation (Call-by-Name) [Default]"
-            putStrLn "  --lazy=false     Use Original Evaluation (Mixed Eager)"
+            putStrLn "  --debug          Enable basic debug info"
+            putStrLn "  --trace          Enable step-by-step AST trace (implies --debug)"
+            putStrLn "  --steps           Print total reduction steps (only in debug/trace mode)"
+            putStrLn "  --stepno         Show step numbers in logs"
+            putStrLn "  --lazy=true      Use Lazy Evaluation [Default]"
+            putStrLn "  --lazy=false     Use Legacy (Strict) Evaluation [Deprecated]"
