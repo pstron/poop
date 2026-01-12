@@ -182,8 +182,13 @@ input[type="text"] {
         font-size: 0.75rem;
         padding: 10px 0;
     }
-
     .footer-content p {
         padding: 0 10px;
     }
+}
+
+.version {
+    font-size: 1.2rem;
+    color: #00aaff;
+    margin-left: 4px;
 }
