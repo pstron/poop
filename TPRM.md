@@ -1,6 +1,6 @@
 # The Poop Reference Manual
 
-**Version 1.1**
+**Version 1.2**
 
 ## 1. Overview
 
@@ -14,25 +14,35 @@ Program execution is essentially a process of substitution: all macros are expan
 
 Code is made up of **tokens**; tokens must be separated by whitespace (spaces, newlines, or tabs).
 
-### 2.1 Comments
+### 2.1 Escape sequences
+
+Throughout the language, backslash `\` introduces escape sequences in textual content:
+
+- `\n` -> newline character
+- `\t` -> tab character  
+- `\r` -> carriage return
+- `\s` -> space character
+- `\\` -> backslash
+
+### 2.2 Comments
 
 * **Single-line comments**: begin with `//` - the rest of the line is ignored.
 * **Multi-line comments**: begin with `/*` and end with `*/` - the enclosed content is ignored.
 
-### 2.2 Identifiers
+### 2.3 Identifiers
 
 Identifiers name parameters or macros.
 
 * **Variable names**: must consist of lowercase letters `[a-z]` or underscores `_`.
 * **Macro names**: may be any name that is not a valid variable name or a lone escape character. They are commonly written in `PascalCase`. Macro names may also include digits, symbols, etc., and may be chosen to make code more convenient in certain contexts.
 
-### 2.3 Literals
+### 2.4 Literals
 
 Literals are content that should be preserved as-is, typically used for output.
 
 * **Format**: begin with `Po` and end with `op`; any characters may appear in between.
 * **Behavior**: they represent their own textual content (with the leading `Po` and trailing `op` removed).
-* `Poop` (4 characters) represents a **space**.
+* `Poop` (4 characters) represents a **empty string** (if you print it, nothing will appear).
 * `Po...op` (length > 4) represents the content between `Po` and `op`.
 * `Popoopop` represents the string `"poop"` (used to avoid being interpreted as a keyword).
 * `Po\n\nop` represents two newline characters.
@@ -127,7 +137,7 @@ The environment provides two special built-in macros.
 // Define a macro Greet
 poop Greet is
   poop name poops
-    PoHelloop Poop name
+    PoHello\sop name
   qooq
 qooq
 

@@ -60,6 +60,7 @@ unescape [] = []
 unescape ('\\':'n':xs) = '\n' : unescape xs
 unescape ('\\':'t':xs) = '\t' : unescape xs
 unescape ('\\':'r':xs) = '\r' : unescape xs
+unescape ('\\':'s':xs) = ' ' : unescape xs
 unescape ('\\':'\\':xs) = '\\' : unescape xs
 unescape ('\\':x:xs) = x : unescape xs
 unescape (x:xs) = x : unescape xs
@@ -156,7 +157,7 @@ nodesToString [] = ""
 nodesToString (x:xs) = nodeStr x ++ nodesToString xs
   where
     nodeStr (Token s) = s
-    nodeStr (Literal s) = if length s <= 4 then " " else drop 2 (take (length s - 2) s)
+    nodeStr (Literal s) = if length s <= 4 then "" else drop 2 (take (length s - 2) s)
     nodeStr (Func p b) = "poop " ++ p ++ " poops " ++ nodesToString b ++ " qooq"
     nodeStr (MacroDef n b) = "poop " ++ n ++ " is " ++ nodesToString b ++ " qooq"
     nodeStr (Apply f a) = "pooping " ++ nodeStr f ++ " poopy " ++ nodesToString a ++ " qooq"
